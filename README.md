@@ -264,3 +264,26 @@ bash scripts/run_stage5a_multicam.sh 'rtsp://192.168.0.57/id=0' '<HLS_URL>'
 ```
 
 The single pipeline connects RTSP source ID 0 and HLS source ID 1 to one live `nvstreammux` with `batch-size=2`, then runs the batch-2 YOLOv8n engine through one `nvinfer` and one NvDCF tracker. The display tail is `nvmultistreamtiler` (1×2, 1280×360) → `nvvideoconvert` → `video/x-raw(memory:NVMM),format=RGBA` → `nvdsosd` → `nveglglessink`. The probe on `nvtracker:src` logs at most 20 detection frames per source and sets each overlay to `cam:<source_id> <label> <confidence> ID:<object_id>`. URLs are not printed; URL occurrences in fatal GStreamer messages are redacted.
+## Stage 5B: five HLS sources, batch 5
+
+Create the static batch-5 artifacts and build the five-source utility:
+
+```bash
+cd /home/evgeny/CV/deepstream-car-tracking
+python scripts/export_yolov8n_onnx.py --batch 5
+python scripts/transpose_yolov8n_onnx.py --batch 5
+bash scripts/build_yolov8n_transposed_b5_fp16_engine.sh
+make -C src stage5b_5cam
+```
+
+For local testing, create `config/local_hls_sources.txt` from `config/local_hls_sources.example.txt` and place exactly five full HLS URLs there, one per line. The local file is ignored by Git and must never be committed. Run:
+
+```bash
+bash scripts/run_stage5b_5cam.sh
+```
+
+The launcher validates the local file without printing its URLs. Passing five URLs explicitly remains supported for one-off runs. For a display-path control test, run `bash scripts/run_stage5b_5cam.sh --no-display`; only the terminal `nveglglessink` is replaced with `fakesink` after `nvdsosd`.
+
+The one pipeline uses five HLS branches. Each branch uses `nvv4l2decoder -> identity sync=true -> nvstreammux`; `identity` releases decoded frames according to timestamps before the mux, preventing bursty HLS-segment delivery from reaching the batcher. The pipeline uses one `nvstreammux` with `batch-size=5`, one batch-5 `nvinfer`, one NvDCF tracker, and a 2×3 1920×720 tiler with 640×360 cells. It has been manually validated with five HLS cameras: NVIDIA decode, batch-5 TensorRT inference, NvDCF tracking, tiled display, clean SIGINT shutdown, and exit status `0`. `--no-display` remains available for headless runs.
+
+Known runtime note: on the tested GStreamer 1.20.3 / libsoup 2.74.2 stack, periodic `gst_query_set_context` and `gst_element_set_context` critical assertions were observed around `gst.soup.session` `HAVE_CONTEXT` activity in the internal `souphttpsrc` HLS stack. The pipeline remained operational and exited with status `0`. No project-level workaround is applied; this is an observed correlation, not a confirmed upstream GStreamer bug.

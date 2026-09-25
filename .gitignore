@@ -6,8 +6,12 @@ src/stage4_rtsp_tracking
 src/stage4b_rtsp_display
 src/stage5a1_hls_decode
 src/stage5a_multicam
+src/stage5b_5cam
 
 # Compiled shared libraries
 parsers/**/*.so
 
 scaner_5cam_nebo.py
+
+# Local HLS URLs and tokens
+config/local_hls_sources.txt

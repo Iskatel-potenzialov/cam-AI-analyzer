@@ -6,7 +6,7 @@ GST_CFLAGS := $(shell pkg-config --cflags gstreamer-1.0)
 GST_LIBS := $(shell pkg-config --libs gstreamer-1.0)
 CXXFLAGS := -Wall -Wextra -std=c++11 $(GST_CFLAGS) -I$(DEEPSTREAM_INCLUDE_DIR)
 LDFLAGS := -L$(DEEPSTREAM_LIB_DIR) -lnvdsgst_meta $(GST_LIBS)
-TARGETS := stage2b3d_metadata_probe stage4_rtsp_tracking stage4b_rtsp_display stage5a1_hls_decode stage5a_multicam
+TARGETS := stage2b3d_metadata_probe stage4_rtsp_tracking stage4b_rtsp_display stage5a1_hls_decode stage5a_multicam stage5b_5cam
 
 all: $(TARGETS)
 
@@ -24,6 +24,9 @@ stage5a1_hls_decode: stage5a1_hls_decode.cpp Makefile
 
 stage5a_multicam: stage5a_multicam.cpp Makefile
 	$(CXX) $(CXXFLAGS) -o $@ stage5a_multicam.cpp $(LDFLAGS)
+
+stage5b_5cam: stage5b_5cam.cpp Makefile
+	$(CXX) $(CXXFLAGS) -o $@ stage5b_5cam.cpp $(LDFLAGS)
 
 clean:
 	rm -f $(TARGETS)

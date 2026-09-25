@@ -38,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--batch",
         type=int,
-        choices=(1, 2),
+        choices=(1, 2, 5),
         default=1,
         help="Static ONNX batch size; default preserves the existing batch-1 workflow.",
     )
