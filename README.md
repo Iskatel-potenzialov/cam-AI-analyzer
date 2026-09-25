@@ -230,3 +230,37 @@ bash scripts/run_stage4b_rtsp_display.sh 'rtsp://192.168.0.57/id=0'
 ```
 
 The display tail is `nvtracker -> nvvideoconvert -> capsfilter -> nvdsosd -> nveglglessink`. The capsfilter is exactly `video/x-raw(memory:NVMM),format=RGBA`, so video remains in NVMM. The probe stays on `nvtracker`'s source pad: it preserves the tracker rectangle and writes each object's `text_params.display_text` as `<label> <confidence> ID:<object_id>`. Console metadata remains limited to the first 20 frames with detections, while display text continues to update. Stop the local Ubuntu window with Ctrl+C.
+## Stage 5A.0: static batch-2 YOLOv8n engine
+
+Keep the batch-1 artifacts used by Stage 4B unchanged and create separate static batch-2 ONNX and FP16 TensorRT artifacts:
+
+```bash
+cd /home/evgeny/CV/deepstream-car-tracking
+python scripts/export_yolov8n_onnx.py --batch 2
+python scripts/transpose_yolov8n_onnx.py --batch 2
+bash scripts/build_yolov8n_transposed_b2_fp16_engine.sh
+```
+
+The new artifacts are `models/yolov8n/artifacts/yolov8n_b2.onnx`, `models/yolov8n/artifacts/yolov8n_b2_transposed.onnx`, and `models/yolov8n/artifacts/yolov8n_fp16_transposed_b2.engine`. The scripts require and print static shapes `[2,3,640,640]`, `[2,84,8400]`, and `[2,8400,84]` respectively. They do not modify the parser or the batch-1 nvinfer config.
+## Stage 5A.1: one HLS source decode validation
+
+Build the separate HLS utility, then pass the HLS URL only as a runtime argument; it is not stored or printed:
+
+```bash
+cd /home/evgeny/CV/deepstream-car-tracking
+make -C src stage5a1_hls_decode
+bash scripts/run_stage5a1_hls_decode.sh '<HLS_URL>' 60
+```
+
+The one-source validation configures the required User-Agent and Referer through `souphttpsrc`, dynamically links only `video/mpegts` from `hlsdemux` and `video/x-h264` from `tsdemux`, and requires byte-stream H.264 access units before `nvv4l2decoder`. It contains no inference, mux, tracker, display, recording, or reconnect logic. A probe logs the first decoded buffer, every 300th buffer, and the final total. Omit `60` to run until Ctrl+C.
+## Stage 5A: two-source batch-2 DeepStream display
+
+Build the separate utility and pass the RTSP and HLS URLs only at runtime:
+
+```bash
+cd /home/evgeny/CV/deepstream-car-tracking
+make -C src stage5a_multicam
+bash scripts/run_stage5a_multicam.sh 'rtsp://192.168.0.57/id=0' '<HLS_URL>'
+```
+
+The single pipeline connects RTSP source ID 0 and HLS source ID 1 to one live `nvstreammux` with `batch-size=2`, then runs the batch-2 YOLOv8n engine through one `nvinfer` and one NvDCF tracker. The display tail is `nvmultistreamtiler` (1×2, 1280×360) → `nvvideoconvert` → `video/x-raw(memory:NVMM),format=RGBA` → `nvdsosd` → `nveglglessink`. The probe on `nvtracker:src` logs at most 20 detection frames per source and sets each overlay to `cam:<source_id> <label> <confidence> ID:<object_id>`. URLs are not printed; URL occurrences in fatal GStreamer messages are redacted.

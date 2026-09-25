@@ -4,6 +4,10 @@ models/**/*.engine
 src/stage2b3d_metadata_probe
 src/stage4_rtsp_tracking
 src/stage4b_rtsp_display
+src/stage5a1_hls_decode
+src/stage5a_multicam
 
 # Compiled shared libraries
 parsers/**/*.so
+
+scaner_5cam_nebo.py

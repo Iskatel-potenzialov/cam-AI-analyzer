@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import onnx
@@ -10,10 +11,7 @@ from onnx import TensorProto, helper
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SOURCE_PATH = PROJECT_ROOT / "models" / "yolov8n" / "artifacts" / "yolov8n.onnx"
-TARGET_PATH = PROJECT_ROOT / "models" / "yolov8n" / "artifacts" / "yolov8n_transposed.onnx"
-SOURCE_SHAPE = [1, 84, 8400]
-TARGET_SHAPE = [1, 8400, 84]
+ARTIFACTS_DIR = PROJECT_ROOT / "models" / "yolov8n" / "artifacts"
 
 
 def tensor_shape(value: onnx.ValueInfoProto) -> list[int | str]:
@@ -23,6 +21,18 @@ def tensor_shape(value: onnx.ValueInfoProto) -> list[int | str]:
         else dimension.dim_param or "?"
         for dimension in value.type.tensor_type.shape.dim
     ]
+
+
+def artifact_paths_for_batch(batch: int) -> tuple[Path, Path]:
+    if batch == 1:
+        return (
+            ARTIFACTS_DIR / "yolov8n.onnx",
+            ARTIFACTS_DIR / "yolov8n_transposed.onnx",
+        )
+    return (
+        ARTIFACTS_DIR / f"yolov8n_b{batch}.onnx",
+        ARTIFACTS_DIR / f"yolov8n_b{batch}_transposed.onnx",
+    )
 
 
 def unique_tensor_name(model: onnx.ModelProto, base_name: str) -> str:
@@ -41,19 +51,37 @@ def unique_tensor_name(model: onnx.ModelProto, base_name: str) -> str:
     return candidate
 
 
-def main() -> None:
-    if not SOURCE_PATH.is_file():
-        raise FileNotFoundError(f"MISSING: source ONNX artifact: {SOURCE_PATH}")
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--batch",
+        type=int,
+        choices=(1, 2),
+        default=1,
+        help="Static ONNX batch size; default preserves the existing batch-1 workflow.",
+    )
+    return parser.parse_args()
 
-    model = onnx.load(SOURCE_PATH)
+
+def main() -> None:
+    args = parse_args()
+    batch = args.batch
+    source_path, target_path = artifact_paths_for_batch(batch)
+    source_shape = [batch, 84, 8400]
+    target_shape = [batch, 8400, 84]
+
+    if not source_path.is_file():
+        raise FileNotFoundError(f"MISSING: source ONNX artifact: {source_path}")
+
+    model = onnx.load(source_path)
     if len(model.graph.output) != 1:
         raise ValueError(f"Expected exactly one ONNX output, got {len(model.graph.output)}")
 
     source_output = model.graph.output[0]
-    source_shape = tensor_shape(source_output)
-    if source_shape != SOURCE_SHAPE:
+    actual_source_shape = tensor_shape(source_output)
+    if actual_source_shape != source_shape:
         raise ValueError(
-            f"Expected source output shape {SOURCE_SHAPE}, got {source_shape}"
+            f"Expected source output shape {source_shape}, got {actual_source_shape}"
         )
     if source_output.type.tensor_type.elem_type == TensorProto.UNDEFINED:
         raise ValueError("Source ONNX output has no tensor element type")
@@ -69,29 +97,36 @@ def main() -> None:
     target_output = helper.make_tensor_value_info(
         target_name,
         source_output.type.tensor_type.elem_type,
-        TARGET_SHAPE,
+        target_shape,
     )
 
     model.graph.node.append(transpose_node)
     del model.graph.output[:]
     model.graph.output.extend([target_output])
 
-    TARGET_PATH.parent.mkdir(parents=True, exist_ok=True)
-    onnx.save(model, TARGET_PATH)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    onnx.save(model, target_path)
 
-    checked_model = onnx.load(TARGET_PATH)
+    checked_model = onnx.load(target_path)
     onnx.checker.check_model(checked_model)
+    checked_input_shapes = [tensor_shape(value) for value in checked_model.graph.input]
     checked_output_shape = tensor_shape(checked_model.graph.output[0])
-    if checked_output_shape != TARGET_SHAPE:
+    expected_input_shape = [batch, 3, 640, 640]
+    if checked_input_shapes != [expected_input_shape]:
         raise ValueError(
-            f"Expected transposed output shape {TARGET_SHAPE}, got {checked_output_shape}"
+            f"Expected input shape {expected_input_shape}, got {checked_input_shapes}"
+        )
+    if checked_output_shape != target_shape:
+        raise ValueError(
+            f"Expected transposed output shape {target_shape}, got {checked_output_shape}"
         )
 
+    print(f"Static batch: {batch}")
     for value in checked_model.graph.input:
         print(f"ONNX input: {value.name} {tensor_shape(value)}")
-    print(f"Source output: {source_output.name} {source_shape}")
+    print(f"Source output: {source_output.name} {actual_source_shape}")
     print(f"Transposed output: {target_name} {checked_output_shape}")
-    print(f"ONNX saved: {TARGET_PATH}")
+    print(f"ONNX saved: {target_path}")
     print("ONNX checker: PASS")
 
 
