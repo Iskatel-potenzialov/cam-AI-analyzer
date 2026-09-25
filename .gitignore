@@ -1,0 +1,9 @@
+models/**/*.pt
+models/**/*.onnx
+models/**/*.engine
+src/stage2b3d_metadata_probe
+src/stage4_rtsp_tracking
+src/stage4b_rtsp_display
+
+# Compiled shared libraries
+parsers/**/*.so
