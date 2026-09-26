@@ -287,3 +287,43 @@ The launcher validates the local file without printing its URLs. Passing five UR
 The one pipeline uses five HLS branches. Each branch uses `nvv4l2decoder -> identity sync=true -> nvstreammux`; `identity` releases decoded frames according to timestamps before the mux, preventing bursty HLS-segment delivery from reaching the batcher. The pipeline uses one `nvstreammux` with `batch-size=5`, one batch-5 `nvinfer`, one NvDCF tracker, and a 2×3 1920×720 tiler with 640×360 cells. It has been manually validated with five HLS cameras: NVIDIA decode, batch-5 TensorRT inference, NvDCF tracking, tiled display, clean SIGINT shutdown, and exit status `0`. `--no-display` remains available for headless runs.
 
 Known runtime note: on the tested GStreamer 1.20.3 / libsoup 2.74.2 stack, periodic `gst_query_set_context` and `gst_element_set_context` critical assertions were observed around `gst.soup.session` `HAVE_CONTEXT` activity in the internal `souphttpsrc` HLS stack. The pipeline remained operational and exited with status `0`. No project-level workaround is applied; this is an observed correlation, not a confirmed upstream GStreamer bug.
+## Stage 5C: performance baseline
+
+Stage 5C measures the existing Stage 5B baseline without changing its CV pipeline. Build the utility, then run the opt-in benchmark with display:
+
+```bash
+cd /home/evgeny/CV/deepstream-car-tracking
+make -C src stage5b_5cam
+bash scripts/run_stage5b_5cam.sh --benchmark
+```
+
+For a headless comparison, use:
+
+```bash
+bash scripts/run_stage5b_5cam.sh --benchmark --no-display
+```
+
+The flags can be supplied in either order. Every five seconds the benchmark reports each source's frame rate and final tiled pipeline output rate. Source FPS is counted from `NvDsFrameMeta` after tracking; pipeline output is explicitly reported as `batches/s`, because `nvstreammux` uses batch size 5. On shutdown it prints total runtime, per-source frames and average FPS, output batches, and average batches/s. No benchmark result is recorded here until a real Ubuntu run.
+
+In a separate terminal, monitor the active process with:
+
+```bash
+bash scripts/monitor_stage5c_resources.sh
+```
+
+The read-only monitor samples GPU utilization, VRAM used/total, temperature, and `stage5b_5cam` CPU percent/RSS once per second through `nvidia-smi` and `ps`.
+## Stage 6: person line crossing
+
+Stage 6 adds business logic only for `source_id=0`: COCO `person` (`class_id=0`) tracks from NvDCF are counted when their bottom-center bounding-box point crosses the configured virtual line. The geometry is normalized: the ROI is the left half of the top third of the full mux frame, and the line is `(1.0, 0.5) -> (0.0, 1.0)` relative to that ROI. The mapping is explicit in `kCamera0Analytics`: side A → side B is `IN`; the reverse is `OUT`.
+
+The implementation uses a signed orientation test, a normalized epsilon/hysteresis zone, and per-`object_id` last-seen cleanup. ROI boundary, line, and `IN`/`OUT` counters are attached as DeepStream display metadata on source 0 before tiling. Sources 1–4 retain their existing behavior. The ROI affects analytics only: there is no physical pre-inference crop, so YOLO continues to process each complete frame. Stage 5C `--benchmark` and `--no-display` remain available.
+For temporary Stage 6 validation, run `bash scripts/run_stage5b_5cam.sh --line-debug`. This opt-in diagnostic mode logs only significant `person` track transitions for source 0 relative to its ROI and virtual line; normal runs remain unchanged.
+## Stage 6A: pre-inference ROI for source 0
+
+Stage 6A uses GPU `nvdspreprocess` before `nvinfer`: `nvstreammux` outputs 2560×1440 and all five sources use full-frame preprocessing into the static 5×3×640×640 tensor. Stage 7 keeps its source-0 ROI exclusively for vehicle analytics; it is not a pre-inference crop. The display remains full frame. `nvinfer` consumes the preprocessed tensor metadata before NvDCF and analytics. Detection quality is not claimed until a manual Ubuntu runtime comparison.
+For temporary source-0 person detection and NvDCF tracking diagnostics, use `bash scripts/run_stage5b_5cam.sh --quality-debug`. The opt-in mode reports significant track lifetime, confidence, bbox-jitter, and possible ID-switch signals; it does not alter detector or tracker settings.
+## Stage 7: vehicle multi-line counting
+
+`bash scripts/run_stage5b_5cam.sh --vehicle-line-debug` enables source-0 vehicle analytics without changing the five-source DeepStream pipeline. It counts only COCO `car` (2), `motorcycle` (3), and `bus` (5) using the bottom-center tracker point inside the normalized ROI `[0.488281250, 0.427777778]–[0.933593750, 1.0]`. Red counts only confirmed bottom-to-top movement (`current_y < previous_y`); green counts both left-to-right and right-to-left movement; the blue line counts only a confirmed crossing whose current x-position is smaller than the previous x-position. Per-line, per-object state prevents a tracked object from being counted repeatedly because of bbox jitter. Source 0 overlays the cyan ROI, red/green/blue lines, and counters; display remains full frame. `--vehicle-quality-debug` is an independent, combinable source-0 diagnostic mode for car/motorcycle/bus detector and NvDCF tracking quality. It reports bounded lifecycle, confidence, bbox-jitter, observation-gap, and possible-ID-switch signals without changing model, threshold, tracker, or crossing decisions. Before NvDCF, source 0 retains only car, motorcycle, and bus metadata; sources 1–4 are unchanged. Stage 7D.1 uses one C++ Stage 7 geometry definition for analytics and OSD, while the launcher validates that the GPU pre-inference crop matches it (`1250;616;1140;824` in the 2560×1440 mux frame) before resizing it to the existing 640×640 tensor; sources 1–4 remain full-frame. This is a quality experiment; no improvement is claimed before a manual comparison.
+
+--vehicle-line-zone-debug is an opt-in visual diagnostic for source 0. RED, GREEN, and BLUE use bounded pixel-space segments: a point must project to t in [0, 1] and be within the shared +/-15 px capture half-width. The overlay draws each finite capture rectangle, endpoints, and the original segments. Crossing decisions additionally require the bottom-center motion segment to intersect the finite counting segment. It does not change detector, tracker, or direction-counter semantics.

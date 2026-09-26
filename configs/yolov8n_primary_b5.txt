@@ -19,6 +19,6 @@ parse-bbox-func-name=NvDsInferParseCustomYoloV8
 disable-output-host-copy=0
 
 [class-attrs-all]
-pre-cluster-threshold=0.25
+pre-cluster-threshold=0.235
 nms-iou-threshold=0.65
 topk=300
