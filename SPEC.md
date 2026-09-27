@@ -511,3 +511,6 @@ V1 считается функционально готовой, когда:
 Главная задача V1:
 
 **надёжно обрабатывать несколько IP-камер через NVIDIA DeepStream, детектировать автомобили YOLOv8/TensorRT и отслеживать их внутри каждого видеопотока.**
+## 18. Post-V1 Stage 8A backend bootstrap
+
+A separately approved post-V1 backend may use FastAPI, Pydantic, SQLAlchemy 2.x, PostgreSQL, psycopg, and Uvicorn to store and serve future CV events. It is independent of the DeepStream runtime and uses `/home/evgeny/CV/backend-venv`, never `CV-venv`. Backend credentials are supplied only through local environment configuration and are not stored in Git. Kafka, RabbitMQ, Redis, Celery, WebSocket, and frontend components are out of scope for Stage 8A.

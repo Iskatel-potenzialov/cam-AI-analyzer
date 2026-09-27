@@ -19,6 +19,8 @@ QUALITY_DEBUG=0
 VEHICLE_LINE_DEBUG=0
 VEHICLE_LINE_ZONE_DEBUG=0
 VEHICLE_QUALITY_DEBUG=0
+EVENT_API_URL="${EVENT_API_URL:-http://127.0.0.1:8000/api/v1/events}"
+MODEL=yolov8n
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --no-display) NO_DISPLAY=1; shift ;;
@@ -28,9 +30,19 @@ while [ "$#" -gt 0 ]; do
         --vehicle-line-debug) VEHICLE_LINE_DEBUG=1; shift ;;
         --vehicle-line-zone-debug) VEHICLE_LINE_ZONE_DEBUG=1; shift ;;
         --vehicle-quality-debug) VEHICLE_QUALITY_DEBUG=1; shift ;;
+        --event-api-url) [ "$#" -ge 2 ] || { printf 'ERROR: --event-api-url requires a value.\n' >&2; exit 2; }; EVENT_API_URL="$2"; shift 2 ;;
+        --model) MODEL="$2"; shift 2 ;;
         *) break ;;
     esac
 done
+
+[[ "$EVENT_API_URL" == http://* || "$EVENT_API_URL" == https://* ]] || { printf 'ERROR: event API URL must begin with http:// or https://.\n' >&2; exit 2; };
+
+case "$MODEL" in
+    yolov8n) ;;
+    yolov8s) CONFIG="$PROJECT_ROOT/configs/yolov8s_primary_b5.txt"; ENGINE="$PROJECT_ROOT/models/yolov8s/artifacts/yolov8s_fp16_transposed_b5.engine" ;;
+    *) printf 'ERROR: model must be yolov8n or yolov8s.\n' >&2; exit 2 ;;
+esac
 
 if [ "$#" -eq 0 ]; then
     [ -r "$LOCAL_SOURCES" ] || { printf 'MISSING: readable local HLS source file: %s\n' "$LOCAL_SOURCES" >&2; exit 1; }
@@ -38,7 +50,7 @@ if [ "$#" -eq 0 ]; then
 elif [ "$#" -eq 5 ]; then
     URLS=("$@")
 else
-    printf 'Usage: %s [--no-display] [--benchmark] [--line-debug] [--quality-debug] [--vehicle-line-debug] [--vehicle-line-zone-debug] [--vehicle-quality-debug] [<hls-url-0> <hls-url-1> <hls-url-2> <hls-url-3> <hls-url-4>]\n' "$0" >&2
+    printf 'Usage: %s [--no-display] [--benchmark] [--line-debug] [--quality-debug] [--vehicle-line-debug] [--vehicle-line-zone-debug] [--vehicle-quality-debug] [--event-api-url URL] [--model yolov8n|yolov8s] [<hls-url-0> <hls-url-1> <hls-url-2> <hls-url-3> <hls-url-4>]\n' "$0" >&2
     exit 2
 fi
 
@@ -46,6 +58,12 @@ fi
 for url in "${URLS[@]}"; do
     [[ "$url" == http://* || "$url" == https://* ]] || { printf 'ERROR: every HLS URL must begin with http:// or https://.\n' >&2; exit 1; }
 done
+
+case "$MODEL" in
+    yolov8n) ;;
+    yolov8s) CONFIG="$PROJECT_ROOT/configs/yolov8s_primary_b5.txt"; ENGINE="$PROJECT_ROOT/models/yolov8s/artifacts/yolov8s_fp16_transposed_b5.engine" ;;
+    *) printf 'ERROR: model must be yolov8n or yolov8s.\n' >&2; exit 2 ;;
+esac
 
 for c in gst-inspect-1.0 nm sed grep mktemp; do command -v "$c" >/dev/null || { printf 'MISSING: command: %s\n' "$c" >&2; exit 1; }; done
 for p in "$BINARY" "$CONFIG" "$PREPROCESS_CONFIG" "$LABELS" "$ENGINE" "$PARSER" "$TRACKER" "$TRACKER_CONFIG"; do [ -r "$p" ] || { printf 'MISSING: readable path: %s\n' "$p" >&2; exit 1; }; done
@@ -76,7 +94,7 @@ fi
 for x in souphttpsrc hlsdemux tsdemux h264parse nvv4l2decoder nvstreammux nvdspreprocess nvinfer nvtracker nvmultistreamtiler nvvideoconvert nvdsosd "$SINK_ELEMENT"; do LD_LIBRARY_PATH="$DS_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" gst-inspect-1.0 "$x" >/dev/null 2>&1 || { printf 'MISSING: GStreamer element: %s\n' "$x" >&2; exit 1; }; done
 [ "$(grep -c '^roi-params-src-0=1250;616;1140;824$' "$PREPROCESS_CONFIG")" -eq 1 ] || { printf 'ERROR: Stage 7 preprocess ROI must be 1250;616;1140;824.\n' >&2; exit 1; }
 nm -D "$PARSER" | grep -q 'NvDsInferParseCustomYoloV8$' || { printf 'MISSING: parser symbol\n' >&2; exit 1; }
-RUNTIME_CONFIG="$(mktemp "${TMPDIR:-/tmp}/yolov8n_primary_b5.XXXXXX")"; trap 'rm -f "$RUNTIME_CONFIG"' EXIT; sed "s|@PROJECT_ROOT@|$PROJECT_ROOT|g" "$CONFIG" > "$RUNTIME_CONFIG"
+RUNTIME_CONFIG="$(mktemp "${TMPDIR:-/tmp}/${MODEL}_primary_b5.XXXXXX")"; trap 'rm -f "$RUNTIME_CONFIG"' EXIT; sed "s|@PROJECT_ROOT@|$PROJECT_ROOT|g" "$CONFIG" > "$RUNTIME_CONFIG"
 printf 'Stage 5B: five HLS URLs loaded without printing them.\nMux: live-source=1 batch-size=5.\nEngine: %s\nDisplay: tiler rows=2 columns=3; cells=640x360.\n' "$ENGINE"
 if [ "$NO_DISPLAY" -eq 1 ]; then
     printf 'Display control mode: fakesink after nvdsosd.\n'
@@ -99,4 +117,4 @@ fi
 if [ "$VEHICLE_QUALITY_DEBUG" -eq 1 ]; then
     printf 'Vehicle quality debug mode: source 0 car, motorcycle, and bus diagnostics only.\n'
 fi
-LD_LIBRARY_PATH="$DS_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" exec "$BINARY" "${DISPLAY_ARGS[@]}" "${URLS[@]}" "$RUNTIME_CONFIG" "$LABELS" "$TRACKER" "$TRACKER_CONFIG" "$PREPROCESS_CONFIG"
+LD_LIBRARY_PATH="$DS_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" exec "$BINARY" "${DISPLAY_ARGS[@]}" --event-api-url "$EVENT_API_URL" "${URLS[@]}" "$RUNTIME_CONFIG" "$LABELS" "$TRACKER" "$TRACKER_CONFIG" "$PREPROCESS_CONFIG"

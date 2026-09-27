@@ -15,3 +15,11 @@ scaner_5cam_nebo.py
 
 # Local HLS URLs and tokens
 config/local_hls_sources.txt
+
+# Backend local configuration
+backend/.env
+backend-venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+src/event_sender_test
