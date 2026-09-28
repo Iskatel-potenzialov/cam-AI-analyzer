@@ -32,6 +32,20 @@ int main() {
     assert(first.direction == "BOTTOM_TO_TOP");
     assert(first.has_confidence);
 
+    const EventPayload red_entry = make_red_zone_entry_event(
+        run_id, "YELLOW", 611, 0.73f);
+    assert(!red_entry.event_id.empty());
+    assert(red_entry.run_id == run_id);
+    assert(red_entry.camera_id == "source1");
+    assert(red_entry.event_type == "red_zone_entry");
+    assert(red_entry.rule_id == "case2_red");
+    assert(red_entry.object_class == "person");
+    assert(red_entry.track_id == 611);
+    assert(!red_entry.has_direction);
+    assert(red_entry.has_zone_transition);
+    assert(red_entry.from_zone == "YELLOW");
+    assert(red_entry.to_zone == "RED");
+    assert(red_entry.has_confidence);
     const EventPayload retry = first;
     assert(retry.event_id == first.event_id);
     assert(retry.run_id == first.run_id);

@@ -23,3 +23,16 @@ __pycache__/
 *.pyc
 .pytest_cache/
 src/event_sender_test
+
+# Frontend local build artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# Generated screen-capture artifacts
+captures/
+
+runtime/
+
+# TypeScript build cache
+*.tsbuildinfo

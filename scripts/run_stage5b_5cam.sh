@@ -19,7 +19,12 @@ QUALITY_DEBUG=0
 VEHICLE_LINE_DEBUG=0
 VEHICLE_LINE_ZONE_DEBUG=0
 VEHICLE_QUALITY_DEBUG=0
+CASE2_DUPLICATE_DEBUG=0
+DATASET_DIAGNOSTIC=0
+CASE1_SNAPSHOT_OSD_DEBUG=0
+CASE2_SNAPSHOT_OSD_DEBUG=0
 EVENT_API_URL="${EVENT_API_URL:-http://127.0.0.1:8000/api/v1/events}"
+LIVE_STATE_API_URL="${LIVE_STATE_API_URL:-http://127.0.0.1:8000/api/v1/live-state}"
 MODEL=yolov8n
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -30,6 +35,10 @@ while [ "$#" -gt 0 ]; do
         --vehicle-line-debug) VEHICLE_LINE_DEBUG=1; shift ;;
         --vehicle-line-zone-debug) VEHICLE_LINE_ZONE_DEBUG=1; shift ;;
         --vehicle-quality-debug) VEHICLE_QUALITY_DEBUG=1; shift ;;
+        --case2-duplicate-debug) CASE2_DUPLICATE_DEBUG=1; shift ;;
+        --dataset-diagnostic) DATASET_DIAGNOSTIC=1; shift ;;
+        --case1-snapshot-osd-debug) CASE1_SNAPSHOT_OSD_DEBUG=1; shift ;;
+        --case2-snapshot-osd-debug) CASE2_SNAPSHOT_OSD_DEBUG=1; shift ;;
         --event-api-url) [ "$#" -ge 2 ] || { printf 'ERROR: --event-api-url requires a value.\n' >&2; exit 2; }; EVENT_API_URL="$2"; shift 2 ;;
         --model) MODEL="$2"; shift 2 ;;
         *) break ;;
@@ -37,6 +46,8 @@ while [ "$#" -gt 0 ]; do
 done
 
 [[ "$EVENT_API_URL" == http://* || "$EVENT_API_URL" == https://* ]] || { printf 'ERROR: event API URL must begin with http:// or https://.\n' >&2; exit 2; };
+[[ "$LIVE_STATE_API_URL" == http://* || "$LIVE_STATE_API_URL" == https://* ]] || { printf 'ERROR: live state API URL must begin with http:// or https://.\n' >&2; exit 2; };
+export LIVE_STATE_API_URL
 
 case "$MODEL" in
     yolov8n) ;;
@@ -50,7 +61,7 @@ if [ "$#" -eq 0 ]; then
 elif [ "$#" -eq 5 ]; then
     URLS=("$@")
 else
-    printf 'Usage: %s [--no-display] [--benchmark] [--line-debug] [--quality-debug] [--vehicle-line-debug] [--vehicle-line-zone-debug] [--vehicle-quality-debug] [--event-api-url URL] [--model yolov8n|yolov8s] [<hls-url-0> <hls-url-1> <hls-url-2> <hls-url-3> <hls-url-4>]\n' "$0" >&2
+    printf 'Usage: %s [--no-display] [--benchmark] [--line-debug] [--quality-debug] [--vehicle-line-debug] [--vehicle-line-zone-debug] [--vehicle-quality-debug] [--case2-duplicate-debug] [--dataset-diagnostic] [--case1-snapshot-osd-debug] [--case2-snapshot-osd-debug] [--event-api-url URL] [--model yolov8n|yolov8s] [<hls-url-0> <hls-url-1> <hls-url-2> <hls-url-3> <hls-url-4>]\n' "$0" >&2
     exit 2
 fi
 
@@ -91,8 +102,22 @@ fi
 if [ "$VEHICLE_QUALITY_DEBUG" -eq 1 ]; then
     DISPLAY_ARGS+=(--vehicle-quality-debug)
 fi
-for x in souphttpsrc hlsdemux tsdemux h264parse nvv4l2decoder nvstreammux nvdspreprocess nvinfer nvtracker nvmultistreamtiler nvvideoconvert nvdsosd "$SINK_ELEMENT"; do LD_LIBRARY_PATH="$DS_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" gst-inspect-1.0 "$x" >/dev/null 2>&1 || { printf 'MISSING: GStreamer element: %s\n' "$x" >&2; exit 1; }; done
+if [ "$CASE2_DUPLICATE_DEBUG" -eq 1 ]; then
+    DISPLAY_ARGS+=(--case2-duplicate-debug)
+fi
+if [ "$DATASET_DIAGNOSTIC" -eq 1 ]; then
+    DISPLAY_ARGS+=(--dataset-diagnostic)
+fi
+if [ "$CASE1_SNAPSHOT_OSD_DEBUG" -eq 1 ]; then
+    DISPLAY_ARGS+=(--case1-snapshot-osd-debug)
+fi
+if [ "$CASE2_SNAPSHOT_OSD_DEBUG" -eq 1 ]; then
+    DISPLAY_ARGS+=(--case2-snapshot-osd-debug)
+fi
+DATASET_ELEMENTS=(); if [ "$DATASET_DIAGNOSTIC" -eq 1 ]; then DATASET_ELEMENTS=(tee queue nvstreamdemux nvjpegenc fakesink); fi
+for x in souphttpsrc hlsdemux tsdemux h264parse nvv4l2decoder nvstreammux nvdspreprocess nvinfer nvtracker nvmultistreamtiler nvvideoconvert nvdsosd nvstreamdemux nvjpegenc appsink "$SINK_ELEMENT" "${DATASET_ELEMENTS[@]}"; do LD_LIBRARY_PATH="$DS_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" gst-inspect-1.0 "$x" >/dev/null 2>&1 || { printf 'MISSING: GStreamer element: %s\n' "$x" >&2; exit 1; }; done
 [ "$(grep -c '^roi-params-src-0=1250;616;1140;824$' "$PREPROCESS_CONFIG")" -eq 1 ] || { printf 'ERROR: Stage 7 preprocess ROI must be 1250;616;1140;824.\n' >&2; exit 1; }
+[ "$(grep -c '^roi-params-src-1=1034;586;1286;850$' "$PREPROCESS_CONFIG")" -eq 1 ] || { printf 'ERROR: Case 2A source 1 preprocess ROI must be 1034;586;1286;850 for the 2560x1440 mux frame.\n' >&2; exit 1; }
 nm -D "$PARSER" | grep -q 'NvDsInferParseCustomYoloV8$' || { printf 'MISSING: parser symbol\n' >&2; exit 1; }
 RUNTIME_CONFIG="$(mktemp "${TMPDIR:-/tmp}/${MODEL}_primary_b5.XXXXXX")"; trap 'rm -f "$RUNTIME_CONFIG"' EXIT; sed "s|@PROJECT_ROOT@|$PROJECT_ROOT|g" "$CONFIG" > "$RUNTIME_CONFIG"
 printf 'Stage 5B: five HLS URLs loaded without printing them.\nMux: live-source=1 batch-size=5.\nEngine: %s\nDisplay: tiler rows=2 columns=3; cells=640x360.\n' "$ENGINE"
@@ -117,4 +142,13 @@ fi
 if [ "$VEHICLE_QUALITY_DEBUG" -eq 1 ]; then
     printf 'Vehicle quality debug mode: source 0 car, motorcycle, and bus diagnostics only.\n'
 fi
-LD_LIBRARY_PATH="$DS_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" exec "$BINARY" "${DISPLAY_ARGS[@]}" --event-api-url "$EVENT_API_URL" "${URLS[@]}" "$RUNTIME_CONFIG" "$LABELS" "$TRACKER" "$TRACKER_CONFIG" "$PREPROCESS_CONFIG"
+if [ "$CASE1_SNAPSHOT_OSD_DEBUG" -eq 1 ]; then
+    printf 'Case 1 snapshot OSD debug: first 10 source0 snapshot frames.\n'
+fi
+if [ "$CASE2_SNAPSHOT_OSD_DEBUG" -eq 1 ]; then
+    printf 'Case 2 snapshot OSD debug: first 10 source1 snapshot frames.\n'
+fi
+if [ "$DATASET_DIAGNOSTIC" -eq 1 ]; then
+    printf 'Dataset diagnostic: source1 metadata PTS vs JPEG PTS; no files are written.\n'
+fi
+LD_LIBRARY_PATH="$DS_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" exec "$BINARY" "${DISPLAY_ARGS[@]}" --snapshot-path-source0 "$PROJECT_ROOT/runtime/source0_snapshot.jpg" --snapshot-path "$PROJECT_ROOT/runtime/source1_snapshot.jpg" --event-api-url "$EVENT_API_URL" "${URLS[@]}" "$RUNTIME_CONFIG" "$LABELS" "$TRACKER" "$TRACKER_CONFIG" "$PREPROCESS_CONFIG"

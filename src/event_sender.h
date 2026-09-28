@@ -21,8 +21,12 @@ struct EventPayload {
     std::string object_class;
     std::uint64_t track_id;
     std::string direction;
+    std::string from_zone;
+    std::string to_zone;
     float confidence;
     bool has_confidence;
+    bool has_direction;
+    bool has_zone_transition;
 };
 
 struct EventSenderStats {
@@ -44,6 +48,12 @@ EventPayload make_line_crossing_event(
     const std::string& object_class,
     std::uint64_t track_id,
     const std::string& direction,
+    float confidence);
+
+EventPayload make_red_zone_entry_event(
+    const std::string& run_id,
+    const std::string& from_zone,
+    std::uint64_t track_id,
     float confidence);
 
 class EventSender {

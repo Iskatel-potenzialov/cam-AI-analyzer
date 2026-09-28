@@ -81,15 +81,21 @@ std::string payload_json(const EventPayload& event) {
          << "\",\"event_type\":\"" << json_escape(event.event_type)
          << "\",\"rule_id\":\"" << json_escape(event.rule_id)
          << "\",\"object_class\":\"" << json_escape(event.object_class)
-         << "\",\"track_id\":" << event.track_id
-         << ",\"direction\":\"" << json_escape(event.direction) << "\"";
+         << "\",\"track_id\":" << event.track_id;
+    if (event.has_direction) {
+        json << ",\"direction\":\"" << json_escape(event.direction) << "\"";
+    }
     if (event.has_confidence) {
         json << ",\"confidence\":" << std::fixed << std::setprecision(6) << event.confidence;
     }
-    json << ",\"attributes\":{\"run_id\":\"" << json_escape(event.run_id) << "\"}}";
+    json << ",\"attributes\":{\"run_id\":\"" << json_escape(event.run_id) << "\"";
+    if (event.has_zone_transition) {
+        json << ",\"from_zone\":\"" << json_escape(event.from_zone)
+             << "\",\"to_zone\":\"" << json_escape(event.to_zone) << "\"";
+    }
+    json << "}}";
     return json.str();
 }
-
 std::string event_log_fields(const EventPayload& event) {
     std::ostringstream fields;
     fields << "event_id=" << event.event_id
@@ -182,9 +188,33 @@ EventPayload make_line_crossing_event(
     event.direction = direction;
     event.confidence = confidence;
     event.has_confidence = std::isfinite(confidence) && confidence >= 0.0f && confidence <= 1.0f;
+    event.has_direction = true;
+    event.has_zone_transition = false;
     return event;
 }
 
+EventPayload make_red_zone_entry_event(
+    const std::string& run_id,
+    const std::string& from_zone,
+    std::uint64_t track_id,
+    float confidence) {
+    EventPayload event;
+    event.event_id = new_event_uuid();
+    event.run_id = run_id;
+    event.timestamp = utc_timestamp();
+    event.camera_id = "source1";
+    event.event_type = "red_zone_entry";
+    event.rule_id = "case2_red";
+    event.object_class = "person";
+    event.track_id = track_id;
+    event.confidence = confidence;
+    event.has_confidence = std::isfinite(confidence) && confidence >= 0.0f && confidence <= 1.0f;
+    event.has_direction = false;
+    event.from_zone = from_zone;
+    event.to_zone = "RED";
+    event.has_zone_transition = true;
+    return event;
+}
 EventSender::EventSender(const std::string& endpoint_url)
     : endpoint_url_(endpoint_url), accepting_(false), stopping_(false), started_(false), enqueued_(0), sent_(0), failed_(0), queue_full_(0) {
 }
