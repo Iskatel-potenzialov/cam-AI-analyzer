@@ -8,7 +8,7 @@ CURL_CFLAGS := $(shell pkg-config --cflags libcurl)
 CURL_LIBS := $(shell pkg-config --libs libcurl)
 CXXFLAGS := -Wall -Wextra -std=c++11 $(GST_CFLAGS) -I$(DEEPSTREAM_INCLUDE_DIR)
 LDFLAGS := -L$(DEEPSTREAM_LIB_DIR) -lnvdsgst_meta -lnvds_meta $(GST_LIBS)
-TARGETS := stage2b3d_metadata_probe stage4_rtsp_tracking stage4b_rtsp_display stage5a1_hls_decode stage5a_multicam stage5b_5cam
+TARGETS := stage2b3d_metadata_probe stage4_rtsp_tracking stage4b_rtsp_display stage5a1_hls_decode stage5a_multicam stage5b_5cam tracker_benchmark
 
 all: $(TARGETS)
 
@@ -29,6 +29,9 @@ stage5a_multicam: stage5a_multicam.cpp Makefile
 
 stage5b_5cam: stage5b_5cam.cpp event_sender.cpp event_sender.h live_state_sender.cpp live_state_sender.h Makefile
 	$(CXX) $(CXXFLAGS) $(CURL_CFLAGS) -o $@ stage5b_5cam.cpp event_sender.cpp live_state_sender.cpp $(LDFLAGS) $(CURL_LIBS)
+
+tracker_benchmark: tracker_benchmark.cpp Makefile
+	$(CXX) $(CXXFLAGS) -o $@ tracker_benchmark.cpp $(LDFLAGS)
 
 event_sender_test: event_sender_test.cpp event_sender.cpp event_sender.h Makefile
 	$(CXX) -Wall -Wextra -std=c++11 -pthread $(CURL_CFLAGS) -o $@ event_sender_test.cpp event_sender.cpp $(CURL_LIBS)

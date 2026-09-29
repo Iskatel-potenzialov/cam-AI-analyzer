@@ -41,3 +41,8 @@ datasets/
 # Local development documentation
 AGENTS.md
 SPEC.md
+
+# Tracker benchmark generated artifacts
+src/tracker_benchmark
+benchmark/clips/
+benchmark/results/
