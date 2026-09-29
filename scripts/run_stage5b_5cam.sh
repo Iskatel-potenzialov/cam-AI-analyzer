@@ -21,6 +21,11 @@ VEHICLE_LINE_ZONE_DEBUG=0
 VEHICLE_QUALITY_DEBUG=0
 CASE2_DUPLICATE_DEBUG=0
 DATASET_DIAGNOSTIC=0
+DATASET_COLLECT=0
+DATASET_BASELINE_INTERVAL_SEC=1.0
+DATASET_HARD_COOLDOWN_SEC=2.0
+DATASET_OVERLAP_IOU=0.50
+DATASET_WIDE_ASPECT=0.90
 CASE1_SNAPSHOT_OSD_DEBUG=0
 CASE2_SNAPSHOT_OSD_DEBUG=0
 EVENT_API_URL="${EVENT_API_URL:-http://127.0.0.1:8000/api/v1/events}"
@@ -37,6 +42,11 @@ while [ "$#" -gt 0 ]; do
         --vehicle-quality-debug) VEHICLE_QUALITY_DEBUG=1; shift ;;
         --case2-duplicate-debug) CASE2_DUPLICATE_DEBUG=1; shift ;;
         --dataset-diagnostic) DATASET_DIAGNOSTIC=1; shift ;;
+        --dataset-collect) DATASET_COLLECT=1; shift ;;
+        --dataset-baseline-interval-sec) [ "$#" -ge 2 ] || { printf 'ERROR: --dataset-baseline-interval-sec requires a value.\n' >&2; exit 2; }; DATASET_BASELINE_INTERVAL_SEC="$2"; shift 2 ;;
+        --dataset-hard-cooldown-sec) [ "$#" -ge 2 ] || { printf 'ERROR: --dataset-hard-cooldown-sec requires a value.\n' >&2; exit 2; }; DATASET_HARD_COOLDOWN_SEC="$2"; shift 2 ;;
+        --dataset-overlap-iou) [ "$#" -ge 2 ] || { printf 'ERROR: --dataset-overlap-iou requires a value.\n' >&2; exit 2; }; DATASET_OVERLAP_IOU="$2"; shift 2 ;;
+        --dataset-wide-aspect) [ "$#" -ge 2 ] || { printf 'ERROR: --dataset-wide-aspect requires a value.\n' >&2; exit 2; }; DATASET_WIDE_ASPECT="$2"; shift 2 ;;
         --case1-snapshot-osd-debug) CASE1_SNAPSHOT_OSD_DEBUG=1; shift ;;
         --case2-snapshot-osd-debug) CASE2_SNAPSHOT_OSD_DEBUG=1; shift ;;
         --event-api-url) [ "$#" -ge 2 ] || { printf 'ERROR: --event-api-url requires a value.\n' >&2; exit 2; }; EVENT_API_URL="$2"; shift 2 ;;
@@ -61,7 +71,7 @@ if [ "$#" -eq 0 ]; then
 elif [ "$#" -eq 5 ]; then
     URLS=("$@")
 else
-    printf 'Usage: %s [--no-display] [--benchmark] [--line-debug] [--quality-debug] [--vehicle-line-debug] [--vehicle-line-zone-debug] [--vehicle-quality-debug] [--case2-duplicate-debug] [--dataset-diagnostic] [--case1-snapshot-osd-debug] [--case2-snapshot-osd-debug] [--event-api-url URL] [--model yolov8n|yolov8s] [<hls-url-0> <hls-url-1> <hls-url-2> <hls-url-3> <hls-url-4>]\n' "$0" >&2
+    printf 'Usage: %s [--no-display] [--benchmark] [--line-debug] [--quality-debug] [--vehicle-line-debug] [--vehicle-line-zone-debug] [--vehicle-quality-debug] [--case2-duplicate-debug] [--dataset-diagnostic] [--dataset-collect] [--dataset-baseline-interval-sec SEC] [--dataset-hard-cooldown-sec SEC] [--dataset-overlap-iou IOU] [--dataset-wide-aspect RATIO] [--case1-snapshot-osd-debug] [--case2-snapshot-osd-debug] [--event-api-url URL] [--model yolov8n|yolov8s] [<hls-url-0> <hls-url-1> <hls-url-2> <hls-url-3> <hls-url-4>]\n' "$0" >&2
     exit 2
 fi
 
@@ -105,6 +115,9 @@ fi
 if [ "$CASE2_DUPLICATE_DEBUG" -eq 1 ]; then
     DISPLAY_ARGS+=(--case2-duplicate-debug)
 fi
+if [ "$DATASET_COLLECT" -eq 1 ]; then
+    DISPLAY_ARGS+=(--dataset-collect --dataset-baseline-interval-sec "$DATASET_BASELINE_INTERVAL_SEC" --dataset-hard-cooldown-sec "$DATASET_HARD_COOLDOWN_SEC" --dataset-overlap-iou "$DATASET_OVERLAP_IOU" --dataset-wide-aspect "$DATASET_WIDE_ASPECT")
+fi
 if [ "$DATASET_DIAGNOSTIC" -eq 1 ]; then
     DISPLAY_ARGS+=(--dataset-diagnostic)
 fi
@@ -147,6 +160,9 @@ if [ "$CASE1_SNAPSHOT_OSD_DEBUG" -eq 1 ]; then
 fi
 if [ "$CASE2_SNAPSHOT_OSD_DEBUG" -eq 1 ]; then
     printf 'Case 2 snapshot OSD debug: first 10 source1 snapshot frames.\n'
+fi
+if [ "$DATASET_COLLECT" -eq 1 ]; then
+    printf 'Dataset collector: source1 clean ROI JPEG plus PTS-matched nvinfer labels.\n'
 fi
 if [ "$DATASET_DIAGNOSTIC" -eq 1 ]; then
     printf 'Dataset diagnostic: source1 metadata PTS vs JPEG PTS; no files are written.\n'

@@ -33,6 +33,11 @@ frontend/.env
 captures/
 
 runtime/
+datasets/
 
 # TypeScript build cache
 *.tsbuildinfo
+
+# Local development documentation
+AGENTS.md
+SPEC.md
