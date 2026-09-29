@@ -24,8 +24,8 @@
 
 В веб-интерфейсе есть отдельные страницы Case 1 и Case 2 с текущим кадром, ключевыми показателями и историей событий.
 
-<img width="638" height="361" alt="image" src="https://github.com/user-attachments/assets/82b1a043-2832-4c8e-bf59-a0a05beb72bf" />
-<img width="637" height="361" alt="image" src="https://github.com/user-attachments/assets/76e4f030-5d6c-48ea-9772-52444fcd7428" />
+
+
 <img width="637" height="361" alt="image" src="https://github.com/user-attachments/assets/e1ab5f18-3417-4d12-86b0-246bb7deb9ac" />
 
 
@@ -33,7 +33,7 @@
 <img width="638" height="361" alt="image" src="https://github.com/user-attachments/assets/8e25bf7f-71dc-4a0f-8017-758125dd6ed6" />
 <img width="638" height="361" alt="image" src="https://github.com/user-attachments/assets/853ffabe-3791-433a-a872-3ed0d3c3d098" />
 <img width="638" height="361" alt="image" src="https://github.com/user-attachments/assets/9400574b-f48a-4f5c-98d2-40107137b6fd" />
-
+<img width="638" height="361" alt="image" src="https://github.com/user-attachments/assets/82b1a043-2832-4c8e-bf59-a0a05beb72bf" />
 
 
 ---
