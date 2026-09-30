@@ -33,16 +33,19 @@ Case 3 работает как отдельный edge-pipeline на Jetson Nano
 Для Case 3 добавлена отдельная вкладка «Инспекции домино» с результатами и изображениями проведённых проверок.
 
 Визуализация Case 1:
+---
 <img width="637" height="361" alt="image" src="https://github.com/user-attachments/assets/7f41bdc6-cf52-4378-9374-c08758fb3440" />
 <img width="637" height="361" alt="image" src="https://github.com/user-attachments/assets/5912083e-7f3d-4da1-b3e0-a70434620c3c" />
 <img width="637" height="361" alt="image" src="https://github.com/user-attachments/assets/e1ab5f18-3417-4d12-86b0-246bb7deb9ac" />
 
 Визуализация Case 2:
+---
 <img width="638" height="361" alt="image" src="https://github.com/user-attachments/assets/8e25bf7f-71dc-4a0f-8017-758125dd6ed6" />
 <img width="638" height="361" alt="image" src="https://github.com/user-attachments/assets/853ffabe-3791-433a-a872-3ed0d3c3d098" />
 <img width="638" height="361" alt="image" src="https://github.com/user-attachments/assets/9400574b-f48a-4f5c-98d2-40107137b6fd" />
 
 Визуализация Case 3:
+---
 <img width="706" height="742" alt="image" src="https://github.com/user-attachments/assets/bf50eab2-9f43-413a-b73e-3409e4c66b77" />
 
 
@@ -389,7 +392,7 @@ Case 3 — отдельный edge-сценарий контроля качес�
 
 Подробное описание Jetson pipeline, memory-safe архитектуры, DINO anomaly detection и структуры результатов:
 
-[Jetson Nano Domino Inspection](jetson/domino_inspection/README.md)
+[Jetson Nano Domino Inspection](jetson/README.md)
 
 ---
 
