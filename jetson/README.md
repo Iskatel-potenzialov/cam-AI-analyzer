@@ -2,9 +2,9 @@
 
 Система визуального контроля поверхности домино на NVIDIA Jetson Nano.
 
-Jetson локально получает изображение с CSI-камеры, через YOLOv5 + TensorRT находит домино, получает high-resolution crop и затем отдельным процессом запускает DINO ViT-S/16 для поиска аномалий поверхности. Результат `GOOD / DEFECT` вместе с изображениями и anomaly scores отправляется на Ubuntu, сохраняется в PostgreSQL и отображается во frontend.
+Jetson локально получает изображение с CSI-камеры, находит домино через YOLO, делает high-resolution снимок, выделяет объект и анализирует его поверхность через DINO. Результат инспекции `GOOD / DEFECT` вместе с изображениями и anomaly scores (оценками аномалии) отправляется на Ubuntu, сохраняется в PostgreSQL и отображается в веб-интерфейсе.
 
-Case 3 работает отдельно от основного DeepStream-конвейера Case 1 / Case 2. Raw video на Ubuntu не передаётся — inference выполняется непосредственно на edge-устройстве.
+Case 3 работает отдельно от основного DeepStream-конвейера Case 1 / Case 2. Raw video (необработанный видеопоток) на Ubuntu не передаётся — inference (запуск нейросетей) выполняется непосредственно на Jetson Nano.
 
 ---
 
@@ -12,15 +12,16 @@ Case 3 работает отдельно от основного DeepStream-ко
 
 | Этап | Что происходит |
 |---|---|
-| Поиск объекта | YOLOv5 находит домино в кадре `1280×720` |
+| Поиск объекта | YOLO находит домино в кадре `1280×720` |
 | Стабилизация | система ждёт несколько стабильных детекций подряд |
 | High-resolution capture | камера переключается на `3264×2464` |
-| Точная локализация | YOLOv5 повторно определяет bbox на high-resolution кадре |
+| Точная локализация | YOLO повторно определяет bbox уже на high-resolution кадре |
 | Выбор кадра | из нескольких кадров выбирается наиболее резкий |
 | Crop | формируется изображение только с домино |
-| Анализ поверхности | DINO ViT-S/16 сравнивает поверхность с GOOD-эталоном |
+| Анализ поверхности | DINO сравнивает поверхность с GOOD-эталоном |
 | Результат | формируется `GOOD` или `DEFECT` |
 | Отправка | JSON и изображения передаются в Inspection API |
+| Веб-интерфейс | оператор видит результат и изображения инспекции |
 
 ---
 
@@ -31,8 +32,7 @@ CSI Camera
     │
     ▼
 1280×720
-YOLOv5 + TensorRT
-поиск домино
+YOLO — поиск домино
     │
     ▼
 STABILIZE
@@ -43,7 +43,7 @@ STABILIZE
 high-resolution capture
     │
     ▼
-YOLOv5 + TensorRT
+YOLO
 точный bbox на большом кадре
     │
     ▼
@@ -57,7 +57,7 @@ YOLO process завершается
     │
     ▼
 DINO ViT-S/16
-anomaly detection поверхности
+анализ поверхности
     │
     ▼
 GOOD / DEFECT
@@ -66,244 +66,557 @@ GOOD / DEFECT
 inspection_result.json + изображения
     │
     ▼
-HTTP POST
+HTTP
     │
     ▼
 Inspection API / Ubuntu
+    │
+    ├── PostgreSQL
+    └── файлы инспекции
+            │
+            ▼
+        React frontend
 ```
 
 YOLO и DINO специально работают в разных процессах, чтобы одновременно не занимать память Jetson Nano.
 
 ---
 
-## Как проходит инспекция
+# Как проходит инспекция
 
-Сначала камера работает в режиме `1280×720`. YOLOv5 находит объект класса `dm`, а система ждёт несколько стабильных bbox подряд.
+## 1. Поиск домино
 
-После стабилизации камера переключается в режим `3264×2464`. YOLOv5 повторно находит домино уже на high-resolution кадре. Из нескольких кадров выбирается наиболее резкий, после чего сохраняется `03_crop.jpg` — основной вход для DINO.
-
-Схема первого этапа:
+Сначала камера работает в режиме:
 
 ```text
-CSI Camera
-    ↓
 1280×720
-    ↓
-YOLOv5
-    ↓
-STABILIZE
-    ↓
-3264×2464
-    ↓
-YOLOv5
-    ↓
-best frame
-    ↓
-crop
 ```
+
+YOLO ищет объект класса `dm`.
+
+После детекции система получает:
+
+- confidence (уверенность модели);
+- bbox (координаты объекта);
+- положение объекта в кадре.
+
+Пример:
+
+```text
+STABILIZE: 1/5
+STABILIZE: 2/5
+STABILIZE: 3/5
+STABILIZE: 4/5
+STABILIZE: 5/5
+```
+
+Объект считается готовым к инспекции только после нескольких стабильных детекций подряд.
+
+Это уменьшает вероятность анализа движущегося или ещё не установленного объекта.
 
 ---
 
-## DINO anomaly detection
+## 2. High-resolution capture
 
-После завершения YOLO-процесса запускается отдельный DINO worker.
+После стабилизации low-resolution камера закрывается и открывается режим:
 
-Используется:
+```text
+3264×2464
+```
+
+Первые кадры используются для warm-up (стабилизации камеры).
+
+После этого снимается несколько high-resolution кадров.
+
+На каждом из них YOLO повторно определяет положение домино.
+
+Повторная детекция нужна потому, что `1280×720` и `3264×2464` используют разные sensor modes (режимы сенсора), поэтому bbox из первого режима нельзя считать точным bbox для второго.
+
+---
+
+## 3. Выбор лучшего кадра
+
+Для каждого успешно найденного домино вычисляются:
+
+- sharpness (резкость);
+- brightness (яркость).
+
+Из нескольких кандидатов выбирается наиболее резкий кадр.
+
+После этого сохраняются:
+
+```text
+01_full.jpg
+02_full_bbox.jpg
+03_crop.jpg
+```
+
+`03_crop.jpg` — основной вход для анализа поверхности.
+
+---
+
+# YOLO
+
+Для поиска домино используется TensorRT engine.
+
+Основные задачи YOLO в Case 3 разные на двух этапах:
+
+```text
+1280×720
+→ найти объект
+→ убедиться, что он стабилен
+
+3264×2464
+→ точно найти объект на качественном кадре
+→ сформировать crop для DINO
+```
+
+YOLO отвечает только за локализацию домино.
+
+Определением дефекта занимается отдельная модель DINO.
+
+---
+
+# DINO anomaly detection
+
+После завершения YOLO-процесса запускается отдельный процесс с:
 
 ```text
 DINO ViT-S/16
 ```
 
-Crop приводится к `224×224`. При patch size `16×16` получается сетка:
+В DINO передаётся:
+
+```text
+03_crop.jpg
+```
+
+Изображение приводится к:
+
+```text
+224×224
+```
+
+При patch size (размере патча) `16×16` получается:
 
 ```text
 14 × 14 = 196 patches
 ```
 
-Для каждого patch формируется embedding размерности `384`.
+Для каждого patch DINO формирует embedding (вектор признаков) размерности:
 
-Каждый patch тестового изображения сравнивается со всеми patch embeddings GOOD-эталона:
+```text
+384
+```
+
+Итог:
+
+```text
+196 × 384
+```
+
+---
+
+## Сравнение с GOOD-эталоном
+
+Для исправного домино заранее формируется GOOD reference.
+
+Каждый patch тестового изображения сравнивается со всеми patch embeddings GOOD-эталона.
 
 ```text
 test patch
     ↓
 все GOOD patches
     ↓
-best cosine similarity
+максимальная cosine similarity
     ↓
+anomaly score
+```
+
+Используется:
+
+```text
 anomaly score = 1 - best cosine similarity
 ```
 
-Текущий экспериментальный threshold:
+Чем больше значение, тем сильнее участок отличается от исправного образца.
+
+Текущий экспериментальный threshold (порог):
 
 ```text
 0.40
 ```
 
-Если значимых anomaly regions нет — результат `GOOD`. Если они есть — `DEFECT`.
-
----
-
-## Memory-safe архитектура
-
-Jetson Nano имеет ограниченный объём памяти. YOLO использует TensorRT, а DINO — PyTorch, поэтому текущий pipeline разделён:
+Если значимых областей выше порога нет:
 
 ```text
-inspection_pipeline_memory_safe.py
-        ↓
-YOLO child process
-        ↓
-process полностью завершается
-        ↓
-DINO child process
-        ↓
-process полностью завершается
+GOOD
 ```
 
-Главный controller сам не загружает TensorRT и PyTorch модели.
-
----
-
-## Основные файлы
+Если они есть:
 
 ```text
-src/
-├── detector_legacy.py
-├── capture_experiment.py
-├── inspection_pipeline_memory_safe.py
-├── inspection_analyze_sample.py
-├── wait_remove_worker.py
-├── inspection_result.py
-└── inspection_sender.py
+DEFECT
 ```
 
-`detector_legacy.py` — TensorRT wrapper для YOLOv5.
-
-`capture_experiment.py` — low-res SEARCH, STABILIZE, high-resolution capture, повторная детекция и выбор crop.
-
-`inspection_pipeline_memory_safe.py` — главный controller, который последовательно запускает YOLO и DINO в разных процессах.
-
-`inspection_analyze_sample.py` — DINO-анализ crop и формирование `GOOD / DEFECT`.
-
-`inspection_result.py` — формирование итогового `inspection_result.json`.
-
-`inspection_sender.py` — отправка результата и изображений на Ubuntu.
-
-`wait_remove_worker.py` — ожидание удаления объекта перед следующей инспекцией.
-
 ---
 
-## Результат инспекции
+## Результаты DINO
 
-Для одной проверки создаются:
+Для каждой инспекции формируются:
 
 ```text
-00_search_full.jpg
-00_search_bbox.jpg
-01_full.jpg
-02_full_bbox.jpg
-03_crop.jpg
 07_anomaly_heatmap.jpg
 08_anomaly_overlay.jpg
 09_top_anomalies_filtered.jpg
-metadata.json
-inspection_result.json
 ```
 
-`inspection_result.json` содержит результат `GOOD / DEFECT`, YOLO confidence и bbox, DINO anomaly scores, полную карту `14×14`, anomaly regions и показатели качества изображения.
+`09_top_anomalies_filtered.jpg` показывает исходный crop и области поверхности, которые превысили установленный threshold.
+
+Также сохраняется полная числовая карта:
+
+```text
+14 × 14 anomaly scores
+```
+
+Поэтому frontend в дальнейшем сможет менять порог отображения без повторного запуска DINO.
 
 ---
 
-## Отправка на Ubuntu
+# Memory-safe архитектура
 
-После анализа Jetson отправляет результат через:
+Jetson Nano имеет ограниченный объём памяти.
+
+YOLO использует TensorRT, а DINO — PyTorch.
+
+Если загрузить обе модели одновременно в один Python-процесс, Jetson испытывает сильный memory pressure (нехватку памяти).
+
+Поэтому pipeline разделён:
+
+```text
+inspection_pipeline_memory_safe.py
+        │
+        ▼
+YOLO process
+        │
+        ▼
+process полностью завершается
+        │
+        ▼
+DINO process
+        │
+        ▼
+process полностью завершается
+```
+
+Главный controller (управляющий процесс) сам не загружает TensorRT и PyTorch модели.
+
+---
+
+# Результат инспекции
+
+Для каждой проверки создаётся:
+
+```text
+inspection_result.json
+```
+
+Он содержит:
+
+- `inspection_id`;
+- `device_id`;
+- время инспекции;
+- `GOOD / DEFECT`;
+- YOLO confidence;
+- bbox;
+- DINO threshold;
+- `score_min`;
+- `score_mean`;
+- `score_p95`;
+- `score_max`;
+- полную карту `14×14`;
+- найденные anomaly regions;
+- sharpness;
+- brightness;
+- список изображений.
+
+Пример набора файлов:
+
+```text
+results/
+└── production/
+    └── inspection_.../
+        ├── 00_search_full.jpg
+        ├── 00_search_bbox.jpg
+        ├── 01_full.jpg
+        ├── 02_full_bbox.jpg
+        ├── 03_crop.jpg
+        ├── 07_anomaly_heatmap.jpg
+        ├── 08_anomaly_overlay.jpg
+        ├── 09_top_anomalies_filtered.jpg
+        ├── metadata.json
+        └── inspection_result.json
+```
+
+---
+
+# Отправка результата
+
+После анализа Jetson отправляет результат на Ubuntu:
 
 ```text
 POST /api/v1/inspections
 ```
 
+Inspection API работает отдельно от API Case 1 / Case 2.
+
 Текущая схема:
 
 ```text
-Jetson Nano
-    ↓
-Inspection API :8010
-    ↓
-PostgreSQL + image storage
-    ↓
-React frontend
+Case 1 / Case 2
+→ FastAPI :8000
+→ cv_events
+→ events
+
+Case 3
+→ Inspection API :8010
+→ inspection_db
+→ inspections
 ```
+
+Две PostgreSQL базы являются независимыми.
 
 ---
 
-## Запуск
+# Backend
 
-Одна полная инспекция:
+Inspection backend написан на FastAPI.
+
+Он отвечает за:
+
+- приём результатов Jetson;
+- проверку структуры `inspection_result.json`;
+- сохранение metadata в PostgreSQL;
+- сохранение изображений;
+- выдачу списка инспекций;
+- выдачу конкретной инспекции;
+- безопасную выдачу изображений.
+
+Основные endpoints:
+
+```text
+GET  /health
+
+POST /api/v1/inspections
+
+GET  /api/v1/inspections
+GET  /api/v1/inspections/{inspection_id}
+
+GET  /api/v1/inspections/{inspection_id}/artifacts/{artifact_name}
+```
+
+Изображения не публикуются через общий static directory.
+
+Backend разрешает получить только artifact, зарегистрированный для конкретной inspection.
+
+---
+
+# Frontend
+
+Case 3 добавлен в существующий React frontend отдельной вкладкой:
+
+```text
+Инспекции домино
+```
+
+Frontend показывает:
+
+- список инспекций;
+- `GOOD / DEFECT`;
+- дату и время;
+- устройство;
+- YOLO confidence;
+- anomaly score;
+- quality metrics;
+- crop;
+- bbox;
+- heatmap;
+- overlay;
+- найденные anomaly regions.
+
+Frontend только отображает результаты.
+
+Он не запускает инспекцию на Jetson.
+
+---
+
+# Запуск
+
+Тестовый запуск одной полной инспекции:
 
 ```bash
 cd /home/nvideo/domino_inspection
 python3 src/inspection_pipeline_memory_safe.py --once
 ```
 
-Без отправки на Ubuntu:
+Pipeline выполняет:
 
-```bash
-python3 src/inspection_pipeline_memory_safe.py --once --no-send
+```text
+SEARCH
+→ STABILIZE
+→ HIGH-RES
+→ YOLO
+→ CROP
+→ DINO
+→ JSON
+→ HTTP POST
+→ exit
 ```
 
-В непрерывном режиме после инспекции используется `WAIT_REMOVE`, после чего система возвращается к SEARCH.
+При ошибке `--once` не запускает автоматический повтор.
 
 ---
 
-## Модели
+# Production trigger
 
-Бинарные model files в Git не включаются.
+Сейчас для тестирования pipeline запускается вручную.
 
-На Jetson ожидаются:
-
-```text
-models/
-├── best_domino_280424.engine
-└── libmyplugins.so
-```
-
-Текущий TensorRT engine — custom YOLOv5 с классом:
+В производственной системе запуск должен происходить по внешнему сигналу, например:
 
 ```text
-dm
+PLC
+датчик
+кнопка
+сигнал конвейера
+управляющая система
 ```
 
-DINO используется как `dino_vits16` из Facebook Research DINO.
+Логика анализа Jetson от этого не меняется.
 
-GOOD reference ожидается по пути:
-
-```text
-results/experiment_01/good_reference/03_crop.jpg
-```
+Меняется только способ запуска одной инспекции.
 
 ---
 
-## Целевая среда
+# Технологический стек
+
+### Computer Vision
+
+- YOLOv5
+- TensorRT
+- DINO ViT-S/16
+- OpenCV
+
+### NVIDIA / Jetson
 
 - NVIDIA Jetson Nano
-- Ubuntu 18.04.6 LTS
-- L4T R32.7.4
-- Python 3.6.9
-- CUDA 10.2.460
-- TensorRT 8.2.1.8
-- PyTorch 1.10.0
-- torchvision 0.9.0
-- OpenCV 4.1.1
-- NumPy 1.19.0
-- PyCUDA 2020.1
-- CSI camera IMX219
+- CUDA
+- TensorRT
+- CSI Camera
+- GStreamer / Argus
 
-Рабочее окружение старое и чувствительное к обновлениям. Не рекомендуется выполнять `apt upgrade`, менять JetPack, CUDA, TensorRT, системный Python или OpenCV без отдельного плана миграции.
+### ML
+
+- PyTorch
+- torchvision
+- NumPy
+
+### Backend
+
+- Python
+- FastAPI
+- Pydantic
+- PostgreSQL
+
+### Frontend
+
+- React
+- TypeScript
+- Vite
 
 ---
 
-## Текущее ограничение
+# Текущее ограничение
 
-High-resolution YOLO чувствителен к сильному изменению ориентации домино. Для production модель нужно дообучить на разных углах поворота, положениях объекта, изменениях масштаба и освещения.
+Во время тестирования обнаружено, что high-resolution YOLO чувствителен к сильному изменению ориентации (повороту) домино.
 
-Следующие шаги для anomaly detection — расширение GOOD bank и калибровка threshold на большем наборе GOOD / DEFECT примеров.
+При повороте объекта low-resolution detector продолжал его находить, а high-resolution detector мог потерять детекцию.
+
+После возвращения объекта ближе к ориентации обучающих данных high-resolution YOLO снова стабильно находил домино.
+
+Для production модель нужно дообучить на:
+
+- разных углах поворота;
+- разных положениях;
+- реальных high-resolution кадрах;
+- изменениях масштаба;
+- изменениях освещения.
+
+---
+
+# Что дальше
+
+## Улучшение YOLO
+
+Собрать дополнительный датасет с реальной CSI-камеры и дообучить модель на допустимых положениях объекта.
+
+---
+
+## Расширение GOOD bank
+
+Сейчас anomaly detection проверен на небольшом наборе GOOD reference.
+
+Дальше можно добавить несколько исправных образцов, чтобы система была устойчивее к естественным различиям между изделиями.
+
+---
+
+## Калибровка threshold
+
+Текущий:
+
+```text
+0.40
+```
+
+является экспериментальным.
+
+Для production threshold нужно определить на расширенном наборе:
+
+```text
+GOOD
++
+DEFECT
+```
+
+и оценить количество false positive / false negative.
+
+---
+
+# Ключевая идея Case 3
+
+Case 3 разделяет задачи между двумя моделями:
+
+```text
+YOLO
+→ где находится изделие
+
+DINO
+→ отличается ли его поверхность от исправной
+```
+
+Jetson выполняет весь inference локально.
+
+На Ubuntu передаётся уже готовый результат:
+
+```text
+inspection
+→ metadata
+→ anomaly scores
+→ images
+→ GOOD / DEFECT
+```
+
+Backend отвечает за хранение.
+
+Frontend — за отображение результата оператору.
+
+Такой подход позволяет использовать Jetson Nano как автономный edge-узел контроля качества и не передавать на сервер постоянный видеопоток.
