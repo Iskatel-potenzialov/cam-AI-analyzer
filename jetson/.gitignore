@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*.log
+
+# Generated inspection data
+results/*
+!results/README.md
+
+# Jetson/TensorRT binaries are device/runtime dependent
+models/*.engine
+models/*.so
+models/*.onnx
+models/*.pt
+models/*.pth
+
+# Local environment / secrets
+.env
+.env.*
+venv/
+.venv/

@@ -29,3 +29,12 @@ The dashboard uses GET /health, GET /api/v1/events, and GET /api/v1/events/summa
 npm run build
 npm run lint
 ```
+## Domino inspection view
+
+The “Инспекции домино” tab reads the isolated Inspection API. Configure its base URL in local `.env`:
+
+```bash
+VITE_INSPECTION_API_BASE_URL=http://127.0.0.1:8010
+```
+
+It uses `GET /api/v1/inspections` and `GET /api/v1/inspections/{inspection_id}`. The current Inspection API returns artifact paths only; it does not expose saved JPEG/PNG files through HTTP yet.

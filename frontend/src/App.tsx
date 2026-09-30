@@ -2,6 +2,8 @@ import {useEffect,useState,type FormEvent} from "react";
 import {useQuery} from "@tanstack/react-query";
 import {getEvents,getHealth,getSummary,source0SnapshotUrl} from "./api/events";
 import Case2Page from "./Case2Page";
+import InspectionPage from "./InspectionPage";
+import {getInspectionHealth} from "./api/inspections";
 import type {EventFilters,EventRecord} from "./types";
 const empty:EventFilters={camera_id:"",rule_id:"",direction:"",run_id:""};
 const directions=["","BOTTOM_TO_TOP","LEFT_TO_RIGHT","RIGHT_TO_LEFT"];
@@ -25,7 +27,7 @@ function Case1Page(){
  const summary=useQuery({queryKey:["summary",filters],queryFn:()=>getSummary(filters),refetchInterval:3000,retry:1});
  const events=useQuery({queryKey:["events",filters],queryFn:()=>getEvents(filters),refetchInterval:3000,retry:1});
  const apply=(e:FormEvent)=>{e.preventDefault();setFilters(draft);};const reset=()=>{setDraft(empty);setFilters(empty);};
- const cards=[["ВСЕГО СОБЫТИЙ",summary.data?.total_events??0,"neutral"],["КРАСНАЯ: СНИЗУ ВВЕРХ",summary.data?.red_bottom_to_top??0,"red"],["ЗЕЛЁНАЯ: СЛЕВА НАПРАВО",summary.data?.green_left_to_right??0,"green"],["ЗЕЛЁНАЯ: СПРАВА НАЛЕВО",summary.data?.green_right_to_left??0,"green"],["СИНЯЯ: СПРАВА НАЛЕВО",summary.data?.blue_right_to_left??0,"blue"]];
+ const cards:[string,number,string][]=[["ВСЕГО СОБЫТИЙ",summary.data?.total_events??0,"neutral"],["КРАСНАЯ: СНИЗУ ВВЕРХ",summary.data?.red_bottom_to_top??0,"red"],["ЗЕЛЁНАЯ: СЛЕВА НАПРАВО",summary.data?.green_left_to_right??0,"green"],["ЗЕЛЁНАЯ: СПРАВА НАЛЕВО",summary.data?.green_right_to_left??0,"green"],["СИНЯЯ: СПРАВА НАЛЕВО",summary.data?.blue_right_to_left??0,"blue"]];
  return <>
   <Source0Snapshot cards={cards} loading={summary.isLoading}/>
   <section className="panel"><div className="heading"><div><h2>Фильтры</h2><p>Статистика и последние события используют одинаковые фильтры.</p></div><small>Обновление каждые 3 секунды</small></div><form onSubmit={apply}><label>Камера<input value={draft.camera_id??""} onChange={e=>setDraft({...draft,camera_id:e.target.value})} placeholder="source0"/></label><label>Линия<select value={draft.rule_id??""} onChange={e=>setDraft({...draft,rule_id:e.target.value})}><option value="">Все линии</option><option value="red">красная</option><option value="green">зелёная</option><option value="blue">синяя</option></select></label><label>Направление<select value={draft.direction??""} onChange={e=>setDraft({...draft,direction:e.target.value})}>{directions.map(d=><option value={d} key={d}>{d?directionName(d):"Все направления"}</option>)}</select></label><label className="run">ID запуска<input value={draft.run_id??""} onChange={e=>setDraft({...draft,run_id:e.target.value})} placeholder="UUID из RUN_START"/></label><div className="actions"><button>Применить</button><button type="button" className="secondary" onClick={reset}>Сбросить</button></div></form></section>
@@ -33,8 +35,11 @@ function Case1Page(){
  </>;
 }
 export default function App(){
- const [view,setView]=useState<"case1"|"case2">("case1");
+ const [view,setView]=useState<"case1"|"case2"|"inspections">("case1");
  const health=useQuery({queryKey:["health"],queryFn:getHealth,refetchInterval:3000,retry:1});
- const online=health.data?.status==="ok";const unavailable=health.isError||(!health.isLoading&&!online);
- return <main className="dashboard"><header><div><p className="eyebrow">ПАНЕЛЬ СОБЫТИЙ DEEPSTREAM</p><h1>{view==="case1"?"Аналитика транспорта":"Контроль людей по зонам"}</h1></div><div className={`status ${unavailable?"offline":online?"online":""}`}><i/>{unavailable?"API недоступен":online?"API доступен":"Проверка API"}</div></header><nav className="case-nav" aria-label="Аналитические сценарии"><button type="button" className={view==="case1"?"active":""} onClick={()=>setView("case1")}>Case 1 — Аналитика транспорта</button><button type="button" className={view==="case2"?"active":""} onClick={()=>setView("case2")}>Case 2 — Контроль зон</button></nav>{view==="case1"?<Case1Page/>:<Case2Page/>}</main>;
+ const inspectionHealth=useQuery({queryKey:["inspection-health"],queryFn:getInspectionHealth,refetchInterval:3000,retry:1});
+ const activeHealth=view==="inspections"?inspectionHealth:health;
+ const online=activeHealth.data?.status==="ok";const unavailable=activeHealth.isError||(!activeHealth.isLoading&&!online);
+ const title=view==="case1"?"Аналитика транспорта":view==="case2"?"Контроль людей по зонам":"Визуальный контроль домино";
+ return <main className="dashboard"><header><div><p className="eyebrow">ПАНЕЛЬ СОБЫТИЙ DEEPSTREAM</p><h1>{title}</h1></div><div className={`status ${unavailable?"offline":online?"online":""}`}><i/>{unavailable?"API недоступен":online?"API доступен":"Проверка API"}</div></header><nav className="case-nav" aria-label="Разделы мониторинга"><button type="button" className={view==="case1"?"active":""} onClick={()=>setView("case1")}>Case 1 — Аналитика транспорта</button><button type="button" className={view==="case2"?"active":""} onClick={()=>setView("case2")}>Case 2 — Контроль зон</button><button type="button" className={view==="inspections"?"active":""} onClick={()=>setView("inspections")}>Инспекции домино</button></nav>{view==="case1"?<Case1Page/>:view==="case2"?<Case2Page/>:<InspectionPage/>}</main>;
 }

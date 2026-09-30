@@ -46,3 +46,8 @@ SPEC.md
 src/tracker_benchmark
 benchmark/clips/
 benchmark/results/
+
+# Case 3 local inspection data
+data/
+inspection-api-venv/
+jetson/results/

@@ -1,0 +1,14 @@
+# Python packages actually present on the Jetson Nano used for the prototype.
+# NOTE: torch was installed from a local NVIDIA-compatible aarch64 wheel,
+# so it should NOT be reinstalled from PyPI on this Jetson.
+numpy==1.19.0
+Pillow==8.4.0
+pycuda==2020.1
+requests==2.31.0
+torchvision==0.9.0
+
+# System-provided / separately installed:
+# torch==1.10.0 (local aarch64 wheel)
+# OpenCV==4.1.1 (JetPack/system package)
+# TensorRT==8.2.1.8
+# CUDA Toolkit==10.2.460

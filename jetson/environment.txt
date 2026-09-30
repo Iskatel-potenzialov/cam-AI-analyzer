@@ -1,0 +1,37 @@
+Jetson Nano prototype environment
+================================
+
+Platform
+- NVIDIA Jetson Nano, aarch64
+- Ubuntu 18.04.6 LTS
+- L4T R32.7.4
+- Python 3.6.9 (system Python)
+
+CUDA / TensorRT
+- CUDA Toolkit 10.2.460
+- TensorRT 8.2.1.8
+- libnvinfer 8.2.1
+- python3-libnvinfer 8.2.1
+
+Python packages
+- numpy 1.19.0
+- Pillow 8.4.0
+- pycuda 2020.1
+- requests 2.31.0
+- torch 1.10.0
+  installed from local wheel:
+  /home/nvideo/Downloads/torch-1.10.0-cp36-cp36m-linux_aarch64.whl
+- torchvision 0.9.0
+
+Computer vision
+- OpenCV 4.1.1 (system / JetPack package)
+
+Camera
+- CSI camera, IMX219
+- low-resolution search: 1280x720
+- high-resolution inspection: 3264x2464
+
+Important
+- Do not perform apt upgrade/dist-upgrade on the working Jetson environment.
+- Do not replace JetPack/CUDA/TensorRT/Python/OpenCV versions without a migration plan.
+- The TensorRT engine is hardware/runtime dependent.

@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "inspection_id": "domino_20260929T235331+0500",
+  "device_id": "jetson_nano_01",
+  "timestamp": "2026-09-29T23:53:31+05:00",
+  "result": "DEFECT",
+  "detection": {
+    "class": "dm",
+    "confidence": 0.882,
+    "bbox": [1439.3, 1010.6, 1708.8, 1595.3]
+  },
+  "anomaly": {
+    "model": "dino_vits16",
+    "embedding_dim": 384,
+    "matching": "all_to_all_good_bank",
+    "threshold": 0.4,
+    "ignore_border_patches": 1,
+    "score_min": 0.048938,
+    "score_mean": 0.172773,
+    "score_p95": 0.308282,
+    "score_max": 0.523421,
+    "grid": {
+      "rows": 14,
+      "cols": 14,
+      "patch_count": 196
+    },
+    "scores": "14x14 float array omitted in this compact example",
+    "regions": [
+      {
+        "rank": 1,
+        "row": 10,
+        "col": 4,
+        "score": 0.523421,
+        "bbox_crop": [80, 434, 100, 478],
+        "center_crop": [90, 456]
+      }
+    ]
+  },
+  "quality": {
+    "sharpness": 34.9,
+    "brightness": 112.1,
+    "crop_width": 280,
+    "crop_height": 608
+  },
+  "artifacts": {
+    "search_full": "00_search_full.jpg",
+    "search_bbox": "00_search_bbox.jpg",
+    "full": "01_full.jpg",
+    "full_bbox": "02_full_bbox.jpg",
+    "crop": "03_crop.jpg",
+    "heatmap": "07_anomaly_heatmap.jpg",
+    "overlay": "08_anomaly_overlay.jpg",
+    "anomalies": "09_top_anomalies_filtered.jpg"
+  }
+}
