@@ -47,9 +47,9 @@ Case 3 работает как отдельный edge-pipeline на Jetson Nano
 Визуализация Case 3:
 ---
 <img width="706" height="742" alt="image" src="https://github.com/user-attachments/assets/bf50eab2-9f43-413a-b73e-3409e4c66b77" />
----
-подробнее : [Jetson Nano Domino Inspection](jetson/README.md)
 
+подробнее : [Jetson Nano Domino Inspection](jetson/README.md)
+---
 
 ## Подготовка датасета и дообучение модели
 
