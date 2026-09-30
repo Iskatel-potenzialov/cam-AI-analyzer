@@ -14,7 +14,7 @@
 - **Case 2 — люди в зонах:** RED / YELLOW / GREEN зоны, текущее количество людей в каждой зоне и события входа в RED.
 - **Case 3 — инспекция домино:** локальный контроль качества на Jetson Nano через YOLO + DINO с результатом `GOOD / DEFECT`.
 
-Для Case 1 и Case 2 основной видеоконвейер построен по GPU-first (приоритет обработки на GPU) принципу: декодирование, подготовка кадров, TensorRT-inference и отрисовка выполняются средствами NVIDIA DeepStream/GStreamer, а кадры по возможности остаются в GPU/NVMM-памяти без постоянного копирования в OpenCV/Python.
+Для Case 1 и Case 2 основной видеоконвейер построен по GPU-first (приоритет обработки на GPU) принципу: декодирование, подготовка кадров, TensorRT-inference и отрисовка выполняются средствами NVIDIA DeepStream/GStreamer, а кадры по возможности остаются в GPU/NVMM-памяти.
 
 Case 3 работает как отдельный edge-pipeline на Jetson Nano и не передаёт постоянный raw-видеопоток на Ubuntu.
 
@@ -32,14 +32,18 @@ Case 3 работает как отдельный edge-pipeline на Jetson Nano
 
 Для Case 3 добавлена отдельная вкладка «Инспекции домино» с результатами и изображениями проведённых проверок.
 
-
+Визуализация Case 1:
 <img width="637" height="361" alt="image" src="https://github.com/user-attachments/assets/7f41bdc6-cf52-4378-9374-c08758fb3440" />
 <img width="637" height="361" alt="image" src="https://github.com/user-attachments/assets/5912083e-7f3d-4da1-b3e0-a70434620c3c" />
 <img width="637" height="361" alt="image" src="https://github.com/user-attachments/assets/e1ab5f18-3417-4d12-86b0-246bb7deb9ac" />
 
+Визуализация Case 2:
 <img width="638" height="361" alt="image" src="https://github.com/user-attachments/assets/8e25bf7f-71dc-4a0f-8017-758125dd6ed6" />
 <img width="638" height="361" alt="image" src="https://github.com/user-attachments/assets/853ffabe-3791-433a-a872-3ed0d3c3d098" />
 <img width="638" height="361" alt="image" src="https://github.com/user-attachments/assets/9400574b-f48a-4f5c-98d2-40107137b6fd" />
+
+Визуализация Case 3:
+<img width="706" height="742" alt="image" src="https://github.com/user-attachments/assets/bf50eab2-9f43-413a-b73e-3409e4c66b77" />
 
 
 ---
@@ -73,7 +77,6 @@ Case 3 работает как отдельный edge-pipeline на Jetson Nano
 выбор более устойчивых настроек
 ```
 Так параметры NvDCF можно подбирать не визуально «на глаз», а воспроизводимо — на одинаковой сцене и одинаковых детекциях.
---- 
 
 Таким образом, в проекте есть два независимых механизма улучшения качества: ошибки детекции собираются в датасет для последующего fine-tuning YOLO, а качество трекинга отдельно улучшается через воспроизводимое сравнение конфигураций NvDCF.
 
