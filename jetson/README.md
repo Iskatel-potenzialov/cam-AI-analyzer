@@ -2,6 +2,9 @@
 
 Система визуального контроля поверхности домино на NVIDIA Jetson Nano.
 
+<img width="1099" height="581" alt="image" src="https://github.com/user-attachments/assets/9eddfd5f-26fe-4d49-87ae-7b73f82118f0" />
+
+
 Jetson локально получает изображение с CSI-камеры, находит домино через YOLO, делает high-resolution снимок, выделяет объект и анализирует его поверхность через DINO. Результат инспекции `GOOD / DEFECT` вместе с изображениями и anomaly scores (оценками аномалии) отправляется на Ubuntu, сохраняется в PostgreSQL и отображается в веб-интерфейсе.
 
 Case 3 работает отдельно от основного DeepStream-конвейера Case 1 / Case 2. Raw video (необработанный видеопоток) на Ubuntu не передаётся — inference (запуск нейросетей) выполняется непосредственно на Jetson Nano.
@@ -93,6 +96,11 @@ YOLO и DINO специально работают в разных процес�
 ```
 
 YOLO ищет объект класса `dm`.
+
+
+<img width="504" height="451" alt="image" src="https://github.com/user-attachments/assets/02c18deb-d148-47f0-a575-7051758833c0" />
+
+
 
 После детекции система получает:
 
@@ -357,6 +365,8 @@ results/
         ├── metadata.json
         └── inspection_result.json
 ```
+
+<img width="706" height="742" alt="image" src="https://github.com/user-attachments/assets/d9dc5581-271c-4843-8a91-d4b18665b4bf" />
 
 ---
 
