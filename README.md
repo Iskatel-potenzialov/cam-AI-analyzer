@@ -49,6 +49,8 @@ Case 3 работает как отдельный edge-pipeline на Jetson Nano
 <img width="706" height="742" alt="image" src="https://github.com/user-attachments/assets/bf50eab2-9f43-413a-b73e-3409e4c66b77" />
 
 подробнее : [Jetson Nano Domino Inspection](jetson/README.md)
+
+
 ---
 
 ## Подготовка датасета и дообучение модели
@@ -62,6 +64,9 @@ Case 3 работает как отдельный edge-pipeline на Jetson Nano
 ---
 
 ## A/B-тестирование трекера NvDCF
+
+<img width="828" height="923" alt="image" src="https://github.com/user-attachments/assets/455cdd40-a459-4ef3-a852-fa6586ca2db1" />
+
 
 Для настройки трекинга реализован отдельный offline benchmark (тест на заранее записанном видео), который позволяет сравнивать разные конфигурации NvDCF на одних и тех же входных данных.
 
